@@ -4,7 +4,8 @@
    Hidden for the family-facing view: group stage standings,
    "Goles por Ronda" chart, "Goles por Equipo" chart.
    No editing. Auto-refreshes every 3 min and on tab refocus.
-   Reuses globals from the main script: state, makeInitialState, renderDashboard.
+   Reuses globals from the main script: state, makeInitialState,
+   renderDashboard, updateHeader.
    ===================================================================== */
 (function(){
   "use strict";
@@ -47,6 +48,9 @@
       const init=(typeof makeInitialState==='function')?makeInitialState():{};
       state = Object.assign(init, data);
       if(typeof renderDashboard==='function') renderDashboard();
+      // Refresh the header counters (Active Round, Matches Done) — without
+      // this they stay frozen at "0 / 31" from the initial empty state.
+      if(typeof updateHeader==='function') updateHeader();
       const st=document.getElementById('roStamp');
       if(st) st.textContent='actualizado '+new Date().toLocaleTimeString(undefined,{hour:'2-digit',minute:'2-digit'});
     }catch(e){
