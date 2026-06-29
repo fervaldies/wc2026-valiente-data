@@ -992,8 +992,13 @@ function pointsForPrediction(round, pid, matchIdx){
   const r = state.results[round][matchIdx];
   if(!p || !r || !r.winner) return 0;
   if(p.h==null || p.a==null) return 0;
-  const predWinner = p.h > p.a ? 'home' : (p.a > p.h ? 'away' : 'draw');
-  if(predWinner === 'draw') return 0;
+  // For draws (h===a), use the explicitly chosen ET/pens winner (p.w).
+  // If no winner was specified for a draw prediction, treat as 0 pts.
+  let predWinner;
+  if(p.h > p.a) predWinner = 'home';
+  else if(p.a > p.h) predWinner = 'away';
+  else predWinner = p.w || null;
+  if(predWinner == null) return 0;
   if(predWinner !== r.winner) return 0;
   const exact = (p.h === r.homeScore && p.a === r.awayScore);
   return exact ? ROUND_VALUE[round]*3 : ROUND_VALUE[round];
