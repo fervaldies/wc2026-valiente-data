@@ -1,8 +1,8 @@
 /* =====================================================================
    WC2026 — READ-ONLY VIEWER
    Loads data.json from the same repo (GitHub Pages), shows the dashboard.
-   Hidden for the family-facing view: group stage standings,
-   "Goles por Ronda" chart, "Goles por Equipo" chart.
+   Hidden for the family-facing view: "Goles por Ronda" chart only.
+   Reordered: "Clasificación por partido" appears before "por rondas".
    No editing. Auto-refreshes every 3 min and on tab refocus.
    Reuses globals from the main script: state, makeInitialState,
    renderDashboard, updateHeader.
@@ -13,15 +13,17 @@
   // hard read-only: nothing writes back
   try{ if(typeof saveState==='function') saveState = function(){}; }catch(e){}
 
-  // Hide the two charts we don't want family to see. Uses CSS :has() so the
-  // rule survives any re-render of the dashboard by the main script.
+  // Hide one chart + reorder cards. Uses CSS :has() and grid `order`, both
+  // survive any re-render of the dashboard by the main script.
   function injectHideStyles(){
     if(document.getElementById('viewerHideStyles')) return;
     const style = document.createElement('style');
     style.id = 'viewerHideStyles';
     style.textContent =
-      '.chart-card:has(#chart-goals-round),' +
-      '.chart-card:has(#chart-team-goals) { display: none !important; }';
+      /* Hide "Goles por ronda" (redundant with the bracket viz above) */
+      '.chart-card:has(#chart-goals-round) { display: none !important; }' +
+      /* Promote "Clasificación por partido" to appear FIRST in the grid */
+      '.chart-card:has(#chart-leaderboard-matches) { order: -1; }';
     document.head.appendChild(style);
   }
 
