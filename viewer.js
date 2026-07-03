@@ -88,8 +88,8 @@
       // ============ Composite canvas ============
       const W = 1300;
       const padding = 32;
-      const titleH = 104;   // room for 44px chart title
-      const headerH = 190;  // room for larger header text
+      const titleH = 130;   // room for 64px chart title
+      const headerH = 240;  // room for larger header text
       const footerH = 60;
 
       let totalH = headerH + padding;
@@ -120,21 +120,21 @@
       // Header (big golden text)
       ctx.textBaseline = 'top';
       ctx.fillStyle = '#E5A847';
-      ctx.font = '500 28px Manrope, sans-serif';
+      ctx.font = '500 36px Manrope, sans-serif';   // was 28px — eyebrow
       ctx.fillText('COPA DEL MUNDO FIFA 2026 · POOL FAMILIAR · VALIENTE', padding, padding);
       ctx.fillStyle = '#F2EFE9';
-      ctx.font = '700 72px Antonio, sans-serif';
-      ctx.fillText('CLASIFICACIÓN Y ESTADÍSTICAS', padding, padding + 40);
+      ctx.font = '700 92px Antonio, sans-serif';   // was 72px — main title
+      ctx.fillText('CLASIFICACIÓN Y ESTADÍSTICAS', padding, padding + 50);
       ctx.fillStyle = '#8B9099';
-      ctx.font = '400 30px Manrope, sans-serif';
+      ctx.font = '400 38px Manrope, sans-serif';   // was 30px — date line
       const dateStr = new Date().toLocaleString('es-ES', {day:'numeric', month:'long', year:'numeric', hour:'2-digit', minute:'2-digit'});
-      ctx.fillText(`Actualizado ${dateStr}`, padding, padding + 130);
+      ctx.fillText(`Actualizado ${dateStr}`, padding, padding + 165);
 
       // Charts with big golden titles above each
       let y = padding + headerH;
       items.forEach(it => {
         ctx.fillStyle = '#E5A847';
-        ctx.font = '600 44px Antonio, sans-serif';
+        ctx.font = '600 64px Antonio, sans-serif';  // was 44px — per-chart title
         ctx.fillText(it.title.toUpperCase(), padding, y);
         y += titleH;
         ctx.drawImage(it.canvas, padding, y, it.renderW, it.renderH);
