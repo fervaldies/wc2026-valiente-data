@@ -3,30 +3,21 @@
    Loads data.json from the same repo (GitHub Pages), shows the dashboard.
    Hidden for the family-facing view: "Goles por Ronda" chart only.
    Reordered: "Clasificación por partido" appears before "por rondas".
-   Includes: "Descargar gráficos" button that fresh-renders 3 specific
-   charts at wide dimensions (so long names on Y-axis don't get clipped)
-   and composites them into a single PNG for sharing on WhatsApp.
+   Includes: "Descargar gráficos" button that composites 3 specific charts
+   (as they appear on the dashboard) into a single PNG for WhatsApp.
    No editing. Auto-refreshes every 3 min and on tab refocus.
-   Reuses globals from the main script: state, charts, makeInitialState,
-   renderDashboard, updateHeader, and the global Chart.js constructor.
+   Reuses globals from the main script: state, makeInitialState,
+   renderDashboard, updateHeader.
    ===================================================================== */
 (function(){
   "use strict";
 
+  // Charts to include in the PNG export, in this exact display order.
   const DOWNLOAD_CHART_IDS = [
-    'chart-leaderboard-matches',
-    'chart-team-goals',
-    'chart-cumulative-goals'
+    'chart-leaderboard-matches',   // Clasificación · por partido
+    'chart-team-goals',            // Goles por equipo
+    'chart-cumulative-goals'       // Goles acumulados del torneo
   ];
-
-  const CHART_ID_TO_KEY = {
-    'chart-leaderboard-rounds':  'leaderboardRounds',
-    'chart-leaderboard-matches': 'leaderboardMatches',
-    'chart-goals-round':         'goalsRound',
-    'chart-cumulative-goals':    'cumulativeGoals',
-    'chart-accuracy':            'accuracy',
-    'chart-team-goals':          'teamGoals'
-  };
 
   try{ if(typeof saveState==='function') saveState = function(){}; }catch(e){}
 
@@ -66,47 +57,13 @@
     }
   }
 
-  async function renderChartAtSize(sourceChart, W, H){
-    const canvas = document.createElement('canvas');
-    canvas.width = W;
-    canvas.height = H;
-    canvas.style.cssText =
-      'position:absolute;left:-99999px;top:0;' +
-      'width:' + W + 'px;height:' + H + 'px';
-    document.body.appendChild(canvas);
-
-    const originalOpts = sourceChart.config.options || {};
-    const overrideOpts = Object.assign({}, originalOpts, {
-      responsive: false,
-      maintainAspectRatio: false,
-      animation: false,
-      devicePixelRatio: 1
-    });
-
-    const tempChart = new Chart(canvas.getContext('2d'), {
-      type: sourceChart.config.type,
-      data: sourceChart.config.data,
-      options: overrideOpts
-    });
-
-    await new Promise(r => setTimeout(r, 200));
-
-    const captured = document.createElement('canvas');
-    captured.width = W;
-    captured.height = H;
-    captured.getContext('2d').drawImage(canvas, 0, 0);
-
-    tempChart.destroy();
-    document.body.removeChild(canvas);
-    return captured;
-  }
-
+  /* =====================================================================
+     COMPOSITE PNG DOWNLOAD
+     Grabs the 3 target chart canvases straight from the dashboard (no
+     re-render) so internal chart text stays proportionally large when
+     scaled up into the composite. Big golden titles + header on top.
+     ===================================================================== */
   async function downloadAllCharts(){
-    if(typeof charts !== 'object' || !charts){
-      alert('Los gráficos aún no están listos. Espera unos segundos y vuelve a intentarlo.');
-      return;
-    }
-
     const btn = document.getElementById('roDownloadAll');
     const originalHtml = btn ? btn.innerHTML : '';
     if(btn){ btn.disabled = true; btn.innerHTML = '⏳ generando…'; }
@@ -114,34 +71,25 @@
     try{
       if(document.fonts && document.fonts.ready) await document.fonts.ready;
 
-      const CHART_W = 1400;
-      const CHART_H = 700;
-      const items = [];
-
-      for(const id of DOWNLOAD_CHART_IDS){
-        const key = CHART_ID_TO_KEY[id];
-        const sourceChart = charts[key];
-        if(!sourceChart) continue;
-
-        const freshCanvas = await renderChartAtSize(sourceChart, CHART_W, CHART_H);
-
-        const originalCanvas = document.getElementById(id);
-        const card = originalCanvas ? originalCanvas.closest('.chart-card') : null;
+      // Look up each dashboard canvas by ID, in order
+      const items = DOWNLOAD_CHART_IDS.map(id => {
+        const canvas = document.getElementById(id);
+        if(!canvas) return null;
+        const card = canvas.closest('.chart-card');
         const titleEl = card ? card.querySelector('.card-title') : null;
         const title = titleEl
           ? titleEl.textContent.trim().replace(/\s+/g,' ')
           : id;
+        return { canvas, title };
+      }).filter(x => x !== null);
 
-        items.push({ canvas: freshCanvas, title });
-      }
-
-      if(items.length === 0){ alert('No hay gráficos disponibles / No charts available'); return; }
+      if(items.length === 0){ alert('Aún no hay gráficos / No charts yet'); return; }
 
       // ============ Composite canvas ============
       const W = 1300;
       const padding = 32;
-      const titleH = 104;   // was 82 — room for 44px chart title
-      const headerH = 190;  // was 150 — room for larger header text
+      const titleH = 104;   // room for 44px chart title
+      const headerH = 190;  // room for larger header text
       const footerH = 60;
 
       let totalH = headerH + padding;
@@ -158,33 +106,35 @@
       out.height = Math.ceil(totalH);
       const ctx = out.getContext('2d');
 
+      // Background gradient (matches app theme)
       const grad = ctx.createLinearGradient(0, 0, 0, totalH);
       grad.addColorStop(0, '#0A0E1A');
       grad.addColorStop(1, '#131826');
       ctx.fillStyle = grad;
       ctx.fillRect(0, 0, W, totalH);
 
+      // Left accent stripe
       ctx.fillStyle = '#E5A847';
       ctx.fillRect(0, 0, 6, totalH);
 
-      // Header — all sizes bumped
+      // Header (big golden text)
       ctx.textBaseline = 'top';
       ctx.fillStyle = '#E5A847';
-      ctx.font = '500 28px Manrope, sans-serif';   // was 20px — eyebrow
+      ctx.font = '500 28px Manrope, sans-serif';
       ctx.fillText('COPA DEL MUNDO FIFA 2026 · POOL FAMILIAR · VALIENTE', padding, padding);
       ctx.fillStyle = '#F2EFE9';
-      ctx.font = '700 72px Antonio, sans-serif';   // was 56px — main title
+      ctx.font = '700 72px Antonio, sans-serif';
       ctx.fillText('CLASIFICACIÓN Y ESTADÍSTICAS', padding, padding + 40);
       ctx.fillStyle = '#8B9099';
-      ctx.font = '400 30px Manrope, sans-serif';   // was 22px — date line
+      ctx.font = '400 30px Manrope, sans-serif';
       const dateStr = new Date().toLocaleString('es-ES', {day:'numeric', month:'long', year:'numeric', hour:'2-digit', minute:'2-digit'});
       ctx.fillText(`Actualizado ${dateStr}`, padding, padding + 130);
 
-      // Charts — title above each graph bumped
+      // Charts with big golden titles above each
       let y = padding + headerH;
       items.forEach(it => {
         ctx.fillStyle = '#E5A847';
-        ctx.font = '600 44px Antonio, sans-serif';  // was 32px — per-chart title
+        ctx.font = '600 44px Antonio, sans-serif';
         ctx.fillText(it.title.toUpperCase(), padding, y);
         y += titleH;
         ctx.drawImage(it.canvas, padding, y, it.renderW, it.renderH);
@@ -196,6 +146,7 @@
       ctx.font = '400 18px Manrope, sans-serif';
       ctx.fillText('fervaldies.github.io/wc2026-valiente-data', padding, totalH - 44);
 
+      // Download via toBlob (mobile-friendly)
       await new Promise((resolve, reject) => {
         out.toBlob(blob => {
           if(!blob) return reject(new Error('toBlob returned null'));
