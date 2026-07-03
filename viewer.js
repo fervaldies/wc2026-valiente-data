@@ -90,11 +90,11 @@
     if(btn){ btn.disabled = true; btn.innerHTML = '⏳ generando…'; }
 
     try{
-      const W = 1080;
+      const W = 1300;       // was 1080 — wider so long names on Y-axis don't get clipped
       const padding = 32;
       const titleH = 82;    // room for 32px chart titles
-      const headerH = 150;  // was 110 — bigger header text needs more room
-      const footerH = 60;   // was 44 — bigger footer text
+      const headerH = 150;  // room for larger header text
+      const footerH = 60;   // room for larger footer text
 
       // Precompute heights
       let totalH = headerH + padding;
