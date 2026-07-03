@@ -13,14 +13,12 @@
 (function(){
   "use strict";
 
-  // Charts to include in the PNG export, in this exact display order.
   const DOWNLOAD_CHART_IDS = [
-    'chart-leaderboard-matches',   // Clasificación · por partido
-    'chart-team-goals',            // Goles por equipo
-    'chart-cumulative-goals'       // Goles acumulados del torneo
+    'chart-leaderboard-matches',
+    'chart-team-goals',
+    'chart-cumulative-goals'
   ];
 
-  // Map DOM canvas ID → key in the main script's `charts` registry
   const CHART_ID_TO_KEY = {
     'chart-leaderboard-rounds':  'leaderboardRounds',
     'chart-leaderboard-matches': 'leaderboardMatches',
@@ -30,7 +28,6 @@
     'chart-team-goals':          'teamGoals'
   };
 
-  // hard read-only: nothing writes back
   try{ if(typeof saveState==='function') saveState = function(){}; }catch(e){}
 
   function injectHideStyles(){
@@ -69,13 +66,6 @@
     }
   }
 
-  /* =====================================================================
-     FRESH CHART RENDER
-     Creates an off-DOM Chart.js instance at wide dimensions using the
-     same config as an existing chart. This forces Chart.js to re-lay-out
-     the axes with enough room for long Y-axis labels (family names,
-     country names) that get clipped on narrow displays.
-     ===================================================================== */
   async function renderChartAtSize(sourceChart, W, H){
     const canvas = document.createElement('canvas');
     canvas.width = W;
@@ -85,7 +75,6 @@
       'width:' + W + 'px;height:' + H + 'px';
     document.body.appendChild(canvas);
 
-    // Shallow-copy options + force non-responsive, no animation
     const originalOpts = sourceChart.config.options || {};
     const overrideOpts = Object.assign({}, originalOpts, {
       responsive: false,
@@ -100,10 +89,8 @@
       options: overrideOpts
     });
 
-    // Give Chart.js time to render
     await new Promise(r => setTimeout(r, 200));
 
-    // Copy to an independent canvas so we can destroy the temp chart
     const captured = document.createElement('canvas');
     captured.width = W;
     captured.height = H;
@@ -114,13 +101,7 @@
     return captured;
   }
 
-  /* =====================================================================
-     COMPOSITE PNG DOWNLOAD
-     Fresh-renders each target chart at 1400×700, then stacks them
-     vertically into a 1300px-wide PNG with a branded header/footer.
-     ===================================================================== */
   async function downloadAllCharts(){
-    // Guard: main script's chart registry must exist
     if(typeof charts !== 'object' || !charts){
       alert('Los gráficos aún no están listos. Espera unos segundos y vuelve a intentarlo.');
       return;
@@ -131,10 +112,8 @@
     if(btn){ btn.disabled = true; btn.innerHTML = '⏳ generando…'; }
 
     try{
-      // Ensure custom fonts are loaded before rendering
       if(document.fonts && document.fonts.ready) await document.fonts.ready;
 
-      // Fresh-render each chart at wide dimensions so labels have room
       const CHART_W = 1400;
       const CHART_H = 700;
       const items = [];
@@ -146,7 +125,6 @@
 
         const freshCanvas = await renderChartAtSize(sourceChart, CHART_W, CHART_H);
 
-        // Read the title from the visible DOM card
         const originalCanvas = document.getElementById(id);
         const card = originalCanvas ? originalCanvas.closest('.chart-card') : null;
         const titleEl = card ? card.querySelector('.card-title') : null;
@@ -162,8 +140,8 @@
       // ============ Composite canvas ============
       const W = 1300;
       const padding = 32;
-      const titleH = 82;
-      const headerH = 150;
+      const titleH = 104;   // was 82 — room for 44px chart title
+      const headerH = 190;  // was 150 — room for larger header text
       const footerH = 60;
 
       let totalH = headerH + padding;
@@ -180,35 +158,33 @@
       out.height = Math.ceil(totalH);
       const ctx = out.getContext('2d');
 
-      // Background gradient (matches app theme)
       const grad = ctx.createLinearGradient(0, 0, 0, totalH);
       grad.addColorStop(0, '#0A0E1A');
       grad.addColorStop(1, '#131826');
       ctx.fillStyle = grad;
       ctx.fillRect(0, 0, W, totalH);
 
-      // Left accent stripe
       ctx.fillStyle = '#E5A847';
       ctx.fillRect(0, 0, 6, totalH);
 
-      // Header
+      // Header — all sizes bumped
       ctx.textBaseline = 'top';
       ctx.fillStyle = '#E5A847';
-      ctx.font = '500 20px Manrope, sans-serif';
+      ctx.font = '500 28px Manrope, sans-serif';   // was 20px — eyebrow
       ctx.fillText('COPA DEL MUNDO FIFA 2026 · POOL FAMILIAR · VALIENTE', padding, padding);
       ctx.fillStyle = '#F2EFE9';
-      ctx.font = '700 56px Antonio, sans-serif';
-      ctx.fillText('CLASIFICACIÓN Y ESTADÍSTICAS', padding, padding + 32);
+      ctx.font = '700 72px Antonio, sans-serif';   // was 56px — main title
+      ctx.fillText('CLASIFICACIÓN Y ESTADÍSTICAS', padding, padding + 40);
       ctx.fillStyle = '#8B9099';
-      ctx.font = '400 22px Manrope, sans-serif';
+      ctx.font = '400 30px Manrope, sans-serif';   // was 22px — date line
       const dateStr = new Date().toLocaleString('es-ES', {day:'numeric', month:'long', year:'numeric', hour:'2-digit', minute:'2-digit'});
-      ctx.fillText(`Actualizado ${dateStr}`, padding, padding + 100);
+      ctx.fillText(`Actualizado ${dateStr}`, padding, padding + 130);
 
-      // Charts
+      // Charts — title above each graph bumped
       let y = padding + headerH;
       items.forEach(it => {
         ctx.fillStyle = '#E5A847';
-        ctx.font = '600 32px Antonio, sans-serif';
+        ctx.font = '600 44px Antonio, sans-serif';  // was 32px — per-chart title
         ctx.fillText(it.title.toUpperCase(), padding, y);
         y += titleH;
         ctx.drawImage(it.canvas, padding, y, it.renderW, it.renderH);
@@ -220,7 +196,6 @@
       ctx.font = '400 18px Manrope, sans-serif';
       ctx.fillText('fervaldies.github.io/wc2026-valiente-data', padding, totalH - 44);
 
-      // Download via toBlob (mobile-friendly)
       await new Promise((resolve, reject) => {
         out.toBlob(blob => {
           if(!blob) return reject(new Error('toBlob returned null'));
@@ -260,11 +235,10 @@
     }
   }
 
-  // boot (after the main script's own load)
   setTimeout(function(){
     lockdown();
     loadData();
-    setInterval(loadData, 180000); // every 3 min
+    setInterval(loadData, 180000);
     document.addEventListener('visibilitychange', ()=>{ if(!document.hidden) loadData(); });
   }, 50);
 })();
