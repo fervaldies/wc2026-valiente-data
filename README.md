@@ -7,7 +7,7 @@ GitHub Pages and drop the link in WhatsApp; it refreshes itself every ~3 minutes
 ## Files
 - `index.html` — the viewer page (your dashboard, locked to read-only)
 - `viewer.js` — loads `data.json` and renders it
-
+ 
 ## Setup (once, ~3 minutes)
 
 1. **Make the data repo public.** In `wc2026-valiente-data` →
