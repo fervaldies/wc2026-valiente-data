@@ -88,7 +88,7 @@
       // ============ Composite canvas ============
       const W = 1300;
       const padding = 32;
-      const titleH = 115;   // room for 64px chart title
+      const titleH = 130;   // room for 64px chart title
       const headerH = 240;  // room for larger header text
       const footerH = 60;
 
