@@ -3,6 +3,8 @@
    Loads data.json from the same repo (GitHub Pages), shows the dashboard.
    Hidden for the family-facing view: "Goles por Ronda" chart only.
    Reordered: "Clasificación por partido" appears before "por rondas".
+   Includes: "Descargar todo" button that composites all visible charts
+   (excluding the bracket) into a single PNG for sharing on WhatsApp.
    No editing. Auto-refreshes every 3 min and on tab refocus.
    Reuses globals from the main script: state, makeInitialState,
    renderDashboard, updateHeader.
@@ -36,9 +38,130 @@
     if(!document.getElementById('roBanner')){
       const h=document.querySelector('header')||document.body;
       const b=document.createElement('div'); b.id='roBanner';
-      b.style.cssText='margin-top:10px;font-size:12px;color:var(--text-muted);font-family:Manrope,system-ui,sans-serif';
-      b.innerHTML='👁 Solo lectura · <span style="opacity:.7">Read-only</span> · <span id="roStamp">cargando…</span>';
+      b.style.cssText='margin-top:10px;font-size:12px;color:var(--text-muted);font-family:Manrope,system-ui,sans-serif;display:flex;align-items:center;gap:12px;flex-wrap:wrap';
+      b.innerHTML =
+        '<span>👁 Solo lectura · <span style="opacity:.7">Read-only</span> · <span id="roStamp">cargando…</span></span>' +
+        '<button id="roDownloadAll" ' +
+          'style="padding:6px 12px;background:transparent;border:1px solid var(--accent);' +
+          'color:var(--accent);border-radius:2px;font-family:Manrope,sans-serif;' +
+          'font-size:12px;cursor:pointer;transition:all 0.2s">' +
+          '📷 Descargar gráficos <span style="opacity:.7">/ Download charts</span>' +
+        '</button>';
       h.appendChild(b);
+      const btn = document.getElementById('roDownloadAll');
+      btn.addEventListener('mouseenter', ()=>{ btn.style.background='var(--accent)'; btn.style.color='#0A0E1A'; });
+      btn.addEventListener('mouseleave', ()=>{ btn.style.background='transparent'; btn.style.color='var(--accent)'; });
+      btn.addEventListener('click', downloadAllCharts);
+    }
+  }
+
+  /* =====================================================================
+     COMPOSITE PNG DOWNLOAD
+     Stacks all visible chart canvases (excluding the bracket) into a
+     single vertical PNG with a branded header. Uses toBlob for better
+     support on mobile (iOS Safari has a data-URL size limit).
+     ===================================================================== */
+  async function downloadAllCharts(){
+    const grid = document.getElementById('charts-grid');
+    if(!grid){ alert('Aún no hay gráficos / No charts yet'); return; }
+
+    // Visible cards in VISUAL order (respect CSS `order` property)
+    const cards = Array.from(grid.querySelectorAll('.chart-card'))
+      .filter(c => getComputedStyle(c).display !== 'none')
+      .sort((a,b) => (parseInt(getComputedStyle(a).order)||0) - (parseInt(getComputedStyle(b).order)||0));
+
+    if(cards.length === 0){ alert('No hay gráficos visibles / No visible charts'); return; }
+
+    const btn = document.getElementById('roDownloadAll');
+    const originalHtml = btn ? btn.innerHTML : '';
+    if(btn){ btn.disabled = true; btn.innerHTML = '⏳ generando…'; }
+
+    try{
+      const items = cards.map(card => ({
+        canvas: card.querySelector('canvas'),
+        title: (card.querySelector('.card-title')?.textContent || '').trim().replace(/\s+/g,' ')
+      })).filter(x => x.canvas);
+
+      const W = 1080;
+      const padding = 32;
+      const titleH = 44;
+      const headerH = 110;
+      const footerH = 44;
+
+      // Precompute heights
+      let totalH = headerH + padding;
+      items.forEach(it => {
+        const ratio = it.canvas.width / it.canvas.height;
+        it.renderW = W - padding*2;
+        it.renderH = it.renderW / ratio;
+        totalH += titleH + it.renderH + padding;
+      });
+      totalH += footerH;
+
+      const out = document.createElement('canvas');
+      out.width = W;
+      out.height = Math.ceil(totalH);
+      const ctx = out.getContext('2d');
+
+      // Background gradient (matches app theme)
+      const grad = ctx.createLinearGradient(0, 0, 0, totalH);
+      grad.addColorStop(0, '#0A0E1A');
+      grad.addColorStop(1, '#131826');
+      ctx.fillStyle = grad;
+      ctx.fillRect(0, 0, W, totalH);
+
+      // Left accent stripe
+      ctx.fillStyle = '#E5A847';
+      ctx.fillRect(0, 0, 6, totalH);
+
+      // Header
+      ctx.textBaseline = 'top';
+      ctx.fillStyle = '#E5A847';
+      ctx.font = '500 11px Manrope, sans-serif';
+      ctx.fillText('COPA DEL MUNDO FIFA 2026 · POOL FAMILIAR · VALIENTE', padding, padding);
+      ctx.fillStyle = '#F2EFE9';
+      ctx.font = '700 32px Antonio, sans-serif';
+      ctx.fillText('CLASIFICACIÓN Y ESTADÍSTICAS', padding, padding + 18);
+      ctx.fillStyle = '#8B9099';
+      ctx.font = '400 12px Manrope, sans-serif';
+      const dateStr = new Date().toLocaleString('es-ES', {day:'numeric', month:'long', year:'numeric', hour:'2-digit', minute:'2-digit'});
+      ctx.fillText(`Actualizado ${dateStr}`, padding, padding + 60);
+
+      // Charts, in visual order
+      let y = padding + headerH;
+      items.forEach(it => {
+        ctx.fillStyle = '#E5A847';
+        ctx.font = '500 13px Antonio, sans-serif';
+        ctx.fillText(it.title.toUpperCase(), padding, y);
+        y += titleH;
+        ctx.drawImage(it.canvas, padding, y, it.renderW, it.renderH);
+        y += it.renderH + padding;
+      });
+
+      // Footer
+      ctx.fillStyle = '#5A6172';
+      ctx.font = '400 10px Manrope, sans-serif';
+      ctx.fillText('fervaldies.github.io/wc2026-valiente-data', padding, totalH - 32);
+
+      // toBlob path (mobile-friendly)
+      await new Promise((resolve, reject) => {
+        out.toBlob(blob => {
+          if(!blob) return reject(new Error('toBlob returned null'));
+          const url = URL.createObjectURL(blob);
+          const link = document.createElement('a');
+          link.href = url;
+          link.download = `wc2026_clasificacion_${Date.now()}.png`;
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+          setTimeout(() => URL.revokeObjectURL(url), 5000);
+          resolve();
+        }, 'image/png', 0.95);
+      });
+    } catch(e){
+      alert('Descarga falló / Download failed: ' + e.message);
+    } finally {
+      if(btn){ btn.disabled = false; btn.innerHTML = originalHtml; }
     }
   }
 
