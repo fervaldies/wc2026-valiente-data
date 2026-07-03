@@ -92,9 +92,9 @@
     try{
       const W = 1080;
       const padding = 32;
-      const titleH = 82;   // was 66 — more room for a 32px title
-      const headerH = 110;
-      const footerH = 44;
+      const titleH = 82;    // room for 32px chart titles
+      const headerH = 150;  // was 110 — bigger header text needs more room
+      const footerH = 60;   // was 44 — bigger footer text
 
       // Precompute heights
       let totalH = headerH + padding;
@@ -125,15 +125,15 @@
       // Header
       ctx.textBaseline = 'top';
       ctx.fillStyle = '#E5A847';
-      ctx.font = '500 11px Manrope, sans-serif';
+      ctx.font = '500 20px Manrope, sans-serif';  // was 11px — eyebrow
       ctx.fillText('COPA DEL MUNDO FIFA 2026 · POOL FAMILIAR · VALIENTE', padding, padding);
       ctx.fillStyle = '#F2EFE9';
-      ctx.font = '700 32px Antonio, sans-serif';
-      ctx.fillText('CLASIFICACIÓN Y ESTADÍSTICAS', padding, padding + 18);
+      ctx.font = '700 56px Antonio, sans-serif';  // was 32px — main title
+      ctx.fillText('CLASIFICACIÓN Y ESTADÍSTICAS', padding, padding + 32);
       ctx.fillStyle = '#8B9099';
-      ctx.font = '400 12px Manrope, sans-serif';
+      ctx.font = '400 22px Manrope, sans-serif';  // was 12px — date line
       const dateStr = new Date().toLocaleString('es-ES', {day:'numeric', month:'long', year:'numeric', hour:'2-digit', minute:'2-digit'});
-      ctx.fillText(`Actualizado ${dateStr}`, padding, padding + 60);
+      ctx.fillText(`Actualizado ${dateStr}`, padding, padding + 100);
 
       // Charts, in the fixed order
       let y = padding + headerH;
@@ -148,8 +148,8 @@
 
       // Footer
       ctx.fillStyle = '#5A6172';
-      ctx.font = '400 10px Manrope, sans-serif';
-      ctx.fillText('fervaldies.github.io/wc2026-valiente-data', padding, totalH - 32);
+      ctx.font = '400 18px Manrope, sans-serif';  // was 10px
+      ctx.fillText('fervaldies.github.io/wc2026-valiente-data', padding, totalH - 44);
 
       // toBlob path (mobile-friendly)
       await new Promise((resolve, reject) => {
