@@ -3,37 +3,42 @@
    Loads data.json from the same repo (GitHub Pages), shows the dashboard.
    Hidden for the family-facing view: "Goles por Ronda" chart only.
    Reordered: "Clasificación por partido" appears before "por rondas".
-   Includes: "Descargar gráficos" button that composites 3 specific
-   charts (Clasificación por partido → Goles por equipo → Goles acumulados)
-   into a single PNG for sharing on WhatsApp.
+   Includes: "Descargar gráficos" button that fresh-renders 3 specific
+   charts at wide dimensions (so long names on Y-axis don't get clipped)
+   and composites them into a single PNG for sharing on WhatsApp.
    No editing. Auto-refreshes every 3 min and on tab refocus.
-   Reuses globals from the main script: state, makeInitialState,
-   renderDashboard, updateHeader.
+   Reuses globals from the main script: state, charts, makeInitialState,
+   renderDashboard, updateHeader, and the global Chart.js constructor.
    ===================================================================== */
 (function(){
   "use strict";
 
   // Charts to include in the PNG export, in this exact display order.
-  // Change this list to reorder or swap charts in the summary image.
   const DOWNLOAD_CHART_IDS = [
     'chart-leaderboard-matches',   // Clasificación · por partido
     'chart-team-goals',            // Goles por equipo
     'chart-cumulative-goals'       // Goles acumulados del torneo
   ];
 
+  // Map DOM canvas ID → key in the main script's `charts` registry
+  const CHART_ID_TO_KEY = {
+    'chart-leaderboard-rounds':  'leaderboardRounds',
+    'chart-leaderboard-matches': 'leaderboardMatches',
+    'chart-goals-round':         'goalsRound',
+    'chart-cumulative-goals':    'cumulativeGoals',
+    'chart-accuracy':            'accuracy',
+    'chart-team-goals':          'teamGoals'
+  };
+
   // hard read-only: nothing writes back
   try{ if(typeof saveState==='function') saveState = function(){}; }catch(e){}
 
-  // Hide one chart + reorder cards. Uses CSS :has() and grid `order`, both
-  // survive any re-render of the dashboard by the main script.
   function injectHideStyles(){
     if(document.getElementById('viewerHideStyles')) return;
     const style = document.createElement('style');
     style.id = 'viewerHideStyles';
     style.textContent =
-      /* Hide "Goles por ronda" (redundant with the bracket viz above) */
       '.chart-card:has(#chart-goals-round) { display: none !important; }' +
-      /* Promote "Clasificación por partido" to appear FIRST in the grid */
       '.chart-card:has(#chart-leaderboard-matches) { order: -1; }';
     document.head.appendChild(style);
   }
@@ -65,38 +70,102 @@
   }
 
   /* =====================================================================
+     FRESH CHART RENDER
+     Creates an off-DOM Chart.js instance at wide dimensions using the
+     same config as an existing chart. This forces Chart.js to re-lay-out
+     the axes with enough room for long Y-axis labels (family names,
+     country names) that get clipped on narrow displays.
+     ===================================================================== */
+  async function renderChartAtSize(sourceChart, W, H){
+    const canvas = document.createElement('canvas');
+    canvas.width = W;
+    canvas.height = H;
+    canvas.style.cssText =
+      'position:absolute;left:-99999px;top:0;' +
+      'width:' + W + 'px;height:' + H + 'px';
+    document.body.appendChild(canvas);
+
+    // Shallow-copy options + force non-responsive, no animation
+    const originalOpts = sourceChart.config.options || {};
+    const overrideOpts = Object.assign({}, originalOpts, {
+      responsive: false,
+      maintainAspectRatio: false,
+      animation: false,
+      devicePixelRatio: 1
+    });
+
+    const tempChart = new Chart(canvas.getContext('2d'), {
+      type: sourceChart.config.type,
+      data: sourceChart.config.data,
+      options: overrideOpts
+    });
+
+    // Give Chart.js time to render
+    await new Promise(r => setTimeout(r, 200));
+
+    // Copy to an independent canvas so we can destroy the temp chart
+    const captured = document.createElement('canvas');
+    captured.width = W;
+    captured.height = H;
+    captured.getContext('2d').drawImage(canvas, 0, 0);
+
+    tempChart.destroy();
+    document.body.removeChild(canvas);
+    return captured;
+  }
+
+  /* =====================================================================
      COMPOSITE PNG DOWNLOAD
-     Stacks the 3 chosen chart canvases (see DOWNLOAD_CHART_IDS above)
-     into a single vertical PNG with a branded header. Uses toBlob for
-     better support on mobile (iOS Safari has a data-URL size limit).
+     Fresh-renders each target chart at 1400×700, then stacks them
+     vertically into a 1300px-wide PNG with a branded header/footer.
      ===================================================================== */
   async function downloadAllCharts(){
-    // Look up the 3 specific canvases by ID, in the order specified
-    const items = DOWNLOAD_CHART_IDS.map(id => {
-      const canvas = document.getElementById(id);
-      if(!canvas) return null;
-      const card = canvas.closest('.chart-card');
-      const titleEl = card ? card.querySelector('.card-title') : null;
-      const title = titleEl
-        ? titleEl.textContent.trim().replace(/\s+/g,' ')
-        : id;
-      return { canvas, title };
-    }).filter(x => x !== null);
-
-    if(items.length === 0){ alert('Aún no hay gráficos / No charts yet'); return; }
+    // Guard: main script's chart registry must exist
+    if(typeof charts !== 'object' || !charts){
+      alert('Los gráficos aún no están listos. Espera unos segundos y vuelve a intentarlo.');
+      return;
+    }
 
     const btn = document.getElementById('roDownloadAll');
     const originalHtml = btn ? btn.innerHTML : '';
     if(btn){ btn.disabled = true; btn.innerHTML = '⏳ generando…'; }
 
     try{
-      const W = 1300;       // was 1080 — wider so long names on Y-axis don't get clipped
-      const padding = 32;
-      const titleH = 82;    // room for 32px chart titles
-      const headerH = 150;  // room for larger header text
-      const footerH = 60;   // room for larger footer text
+      // Ensure custom fonts are loaded before rendering
+      if(document.fonts && document.fonts.ready) await document.fonts.ready;
 
-      // Precompute heights
+      // Fresh-render each chart at wide dimensions so labels have room
+      const CHART_W = 1400;
+      const CHART_H = 700;
+      const items = [];
+
+      for(const id of DOWNLOAD_CHART_IDS){
+        const key = CHART_ID_TO_KEY[id];
+        const sourceChart = charts[key];
+        if(!sourceChart) continue;
+
+        const freshCanvas = await renderChartAtSize(sourceChart, CHART_W, CHART_H);
+
+        // Read the title from the visible DOM card
+        const originalCanvas = document.getElementById(id);
+        const card = originalCanvas ? originalCanvas.closest('.chart-card') : null;
+        const titleEl = card ? card.querySelector('.card-title') : null;
+        const title = titleEl
+          ? titleEl.textContent.trim().replace(/\s+/g,' ')
+          : id;
+
+        items.push({ canvas: freshCanvas, title });
+      }
+
+      if(items.length === 0){ alert('No hay gráficos disponibles / No charts available'); return; }
+
+      // ============ Composite canvas ============
+      const W = 1300;
+      const padding = 32;
+      const titleH = 82;
+      const headerH = 150;
+      const footerH = 60;
+
       let totalH = headerH + padding;
       items.forEach(it => {
         const ratio = it.canvas.width / it.canvas.height;
@@ -125,21 +194,21 @@
       // Header
       ctx.textBaseline = 'top';
       ctx.fillStyle = '#E5A847';
-      ctx.font = '500 20px Manrope, sans-serif';  // was 11px — eyebrow
+      ctx.font = '500 20px Manrope, sans-serif';
       ctx.fillText('COPA DEL MUNDO FIFA 2026 · POOL FAMILIAR · VALIENTE', padding, padding);
       ctx.fillStyle = '#F2EFE9';
-      ctx.font = '700 56px Antonio, sans-serif';  // was 32px — main title
+      ctx.font = '700 56px Antonio, sans-serif';
       ctx.fillText('CLASIFICACIÓN Y ESTADÍSTICAS', padding, padding + 32);
       ctx.fillStyle = '#8B9099';
-      ctx.font = '400 22px Manrope, sans-serif';  // was 12px — date line
+      ctx.font = '400 22px Manrope, sans-serif';
       const dateStr = new Date().toLocaleString('es-ES', {day:'numeric', month:'long', year:'numeric', hour:'2-digit', minute:'2-digit'});
       ctx.fillText(`Actualizado ${dateStr}`, padding, padding + 100);
 
-      // Charts, in the fixed order
+      // Charts
       let y = padding + headerH;
       items.forEach(it => {
         ctx.fillStyle = '#E5A847';
-        ctx.font = '600 32px Antonio, sans-serif';  // chart title size
+        ctx.font = '600 32px Antonio, sans-serif';
         ctx.fillText(it.title.toUpperCase(), padding, y);
         y += titleH;
         ctx.drawImage(it.canvas, padding, y, it.renderW, it.renderH);
@@ -148,10 +217,10 @@
 
       // Footer
       ctx.fillStyle = '#5A6172';
-      ctx.font = '400 18px Manrope, sans-serif';  // was 10px
+      ctx.font = '400 18px Manrope, sans-serif';
       ctx.fillText('fervaldies.github.io/wc2026-valiente-data', padding, totalH - 44);
 
-      // toBlob path (mobile-friendly)
+      // Download via toBlob (mobile-friendly)
       await new Promise((resolve, reject) => {
         out.toBlob(blob => {
           if(!blob) return reject(new Error('toBlob returned null'));
@@ -168,6 +237,7 @@
       });
     } catch(e){
       alert('Descarga falló / Download failed: ' + e.message);
+      console.error(e);
     } finally {
       if(btn){ btn.disabled = false; btn.innerHTML = originalHtml; }
     }
@@ -181,8 +251,6 @@
       const init=(typeof makeInitialState==='function')?makeInitialState():{};
       state = Object.assign(init, data);
       if(typeof renderDashboard==='function') renderDashboard();
-      // Refresh the header counters (Active Round, Matches Done) — without
-      // this they stay frozen at "0 / 31" from the initial empty state.
       if(typeof updateHeader==='function') updateHeader();
       const st=document.getElementById('roStamp');
       if(st) st.textContent='actualizado '+new Date().toLocaleTimeString(undefined,{hour:'2-digit',minute:'2-digit'});
