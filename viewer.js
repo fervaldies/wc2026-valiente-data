@@ -92,7 +92,7 @@
     try{
       const W = 1080;
       const padding = 32;
-      const titleH = 56;   // was 44 — more room for a bigger title
+      const titleH = 66;   // was 56 — more room for a 25px title
       const headerH = 110;
       const footerH = 44;
 
@@ -139,7 +139,7 @@
       let y = padding + headerH;
       items.forEach(it => {
         ctx.fillStyle = '#E5A847';
-        ctx.font = '600 20px Antonio, sans-serif';  // was 13px, now 20px
+        ctx.font = '600 25px Antonio, sans-serif';  // chart title size
         ctx.fillText(it.title.toUpperCase(), padding, y);
         y += titleH;
         ctx.drawImage(it.canvas, padding, y, it.renderW, it.renderH);
