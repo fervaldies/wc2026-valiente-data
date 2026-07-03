@@ -3,14 +3,23 @@
    Loads data.json from the same repo (GitHub Pages), shows the dashboard.
    Hidden for the family-facing view: "Goles por Ronda" chart only.
    Reordered: "Clasificación por partido" appears before "por rondas".
-   Includes: "Descargar todo" button that composites all visible charts
-   (excluding the bracket) into a single PNG for sharing on WhatsApp.
+   Includes: "Descargar gráficos" button that composites 3 specific
+   charts (Clasificación por partido → Goles por equipo → Goles acumulados)
+   into a single PNG for sharing on WhatsApp.
    No editing. Auto-refreshes every 3 min and on tab refocus.
    Reuses globals from the main script: state, makeInitialState,
    renderDashboard, updateHeader.
    ===================================================================== */
 (function(){
   "use strict";
+
+  // Charts to include in the PNG export, in this exact display order.
+  // Change this list to reorder or swap charts in the summary image.
+  const DOWNLOAD_CHART_IDS = [
+    'chart-leaderboard-matches',   // Clasificación · por partido
+    'chart-team-goals',            // Goles por equipo
+    'chart-cumulative-goals'       // Goles acumulados del torneo
+  ];
 
   // hard read-only: nothing writes back
   try{ if(typeof saveState==='function') saveState = function(){}; }catch(e){}
@@ -57,31 +66,30 @@
 
   /* =====================================================================
      COMPOSITE PNG DOWNLOAD
-     Stacks all visible chart canvases (excluding the bracket) into a
-     single vertical PNG with a branded header. Uses toBlob for better
-     support on mobile (iOS Safari has a data-URL size limit).
+     Stacks the 3 chosen chart canvases (see DOWNLOAD_CHART_IDS above)
+     into a single vertical PNG with a branded header. Uses toBlob for
+     better support on mobile (iOS Safari has a data-URL size limit).
      ===================================================================== */
   async function downloadAllCharts(){
-    const grid = document.getElementById('charts-grid');
-    if(!grid){ alert('Aún no hay gráficos / No charts yet'); return; }
+    // Look up the 3 specific canvases by ID, in the order specified
+    const items = DOWNLOAD_CHART_IDS.map(id => {
+      const canvas = document.getElementById(id);
+      if(!canvas) return null;
+      const card = canvas.closest('.chart-card');
+      const titleEl = card ? card.querySelector('.card-title') : null;
+      const title = titleEl
+        ? titleEl.textContent.trim().replace(/\s+/g,' ')
+        : id;
+      return { canvas, title };
+    }).filter(x => x !== null);
 
-    // Visible cards in VISUAL order (respect CSS `order` property)
-    const cards = Array.from(grid.querySelectorAll('.chart-card'))
-      .filter(c => getComputedStyle(c).display !== 'none')
-      .sort((a,b) => (parseInt(getComputedStyle(a).order)||0) - (parseInt(getComputedStyle(b).order)||0));
-
-    if(cards.length === 0){ alert('No hay gráficos visibles / No visible charts'); return; }
+    if(items.length === 0){ alert('Aún no hay gráficos / No charts yet'); return; }
 
     const btn = document.getElementById('roDownloadAll');
     const originalHtml = btn ? btn.innerHTML : '';
     if(btn){ btn.disabled = true; btn.innerHTML = '⏳ generando…'; }
 
     try{
-      const items = cards.map(card => ({
-        canvas: card.querySelector('canvas'),
-        title: (card.querySelector('.card-title')?.textContent || '').trim().replace(/\s+/g,' ')
-      })).filter(x => x.canvas);
-
       const W = 1080;
       const padding = 32;
       const titleH = 44;
@@ -127,7 +135,7 @@
       const dateStr = new Date().toLocaleString('es-ES', {day:'numeric', month:'long', year:'numeric', hour:'2-digit', minute:'2-digit'});
       ctx.fillText(`Actualizado ${dateStr}`, padding, padding + 60);
 
-      // Charts, in visual order
+      // Charts, in the fixed order
       let y = padding + headerH;
       items.forEach(it => {
         ctx.fillStyle = '#E5A847';
