@@ -3,7 +3,7 @@
 A static web page that reads `data.json` from your repo and shows the standings,
 group tables, bracket and charts. No install, no login, no editing. You host it on
 GitHub Pages and drop the link in WhatsApp; it refreshes itself every ~3 minutes.
-
+ 
 ## Files
 - `index.html` — the viewer page (your dashboard, locked to read-only)
 - `viewer.js` — loads `data.json` and renders it
